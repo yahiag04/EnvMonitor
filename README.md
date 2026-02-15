@@ -1,6 +1,7 @@
 # EnvMonitor
 
 ESP32 environmental monitor with DHT11 + MQ-7, real-time telemetry to a Node.js server, OLED output, passive-buzzer alarms, and a modern live web dashboard.
+<img width="1454" height="742" alt="Screenshot 2026-02-15 alle 18 42 05" src="https://github.com/user-attachments/assets/3e89a11c-5f93-4212-963e-bebe2429e168" />
 
 ## Features
 
