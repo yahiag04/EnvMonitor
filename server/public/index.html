@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EnvMonitor Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+
+<body class="app-body">
+  <div class="bg-orb orb-a"></div>
+  <div class="bg-orb orb-b"></div>
+  <div class="bg-grid"></div>
+
+  <header class="topbar reveal">
+    <div class="brand-wrap">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-title">EnvMonitor</div>
+        <div class="brand-sub">DHT11 + MQ-7 Live Station</div>
+      </div>
+    </div>
+    <div class="status-chip" id="navStatus">Offline</div>
+  </header>
+
+  <main class="layout">
+    <section class="hero reveal stagger-1">
+      <div>
+        <p class="kicker">Indoor Air Intelligence</p>
+        <h1>Monitoraggio ambientale in tempo reale</h1>
+        <p class="hero-copy">CO stimato + indice ratio affidabile per alert, con storico e stato calibrazione sempre visibili.</p>
+      </div>
+      <div class="hero-meta">
+        <div class="meta-block">
+          <span class="meta-label">Ultimo aggiornamento</span>
+          <strong id="lastUpdate">Nessun dato</strong>
+        </div>
+        <div class="controls">
+          <label for="minutes">Storico (min)</label>
+          <input id="minutes" type="number" min="1" max="720" value="30">
+          <button id="reload" type="button">Ricarica</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="metrics reveal stagger-2">
+      <article class="metric-card temperature">
+        <p class="metric-label">Temperatura</p>
+        <p class="metric-value"><span id="tVal">--.-</span><small>°C</small></p>
+        <div class="metric-footer"><span class="pill pill-neutral" id="tBadge">—</span></div>
+      </article>
+
+      <article class="metric-card humidity">
+        <p class="metric-label">Umidità</p>
+        <p class="metric-value"><span id="rhVal">--</span><small>%</small></p>
+        <div class="metric-footer"><span class="pill pill-neutral" id="rhBadge">—</span></div>
+      </article>
+
+      <article class="metric-card co-card" id="coCard">
+        <p class="metric-label">CO Estimate</p>
+        <p class="metric-value"><span id="coVal">--</span><small>ppm</small></p>
+        <div class="co-side">
+          <span class="pill pill-neutral" id="coBadge">—</span>
+          <span class="pill pill-neutral" id="calBadge">R0: n/d</span>
+        </div>
+        <p class="co-meta" id="coMeta">raw: -- | ratio: --</p>
+      </article>
+    </section>
+
+    <section class="chart-panel reveal stagger-3">
+      <div class="panel-head">
+        <h2>Storico Segnali</h2>
+        <p>Stato CO su ratio: WARN &lt; <code>0.85</code>, DANGER &lt; <code>0.70</code></p>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+      </div>
+      <p class="panel-note">Endpoint: <code>/api/v1/latest</code> · <code>/api/v1/history</code></p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
