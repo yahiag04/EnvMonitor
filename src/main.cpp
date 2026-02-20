@@ -8,7 +8,9 @@
 #include "net/telemetry_client.h"
 #include "time/time_sync.h"
 #include "display/oled_display.h"
+#include "source/sd_logger.h"
 
+SdLogger sd;
 OledDisplay oled;
 DhtSensor dht;
 Mq7Sensor mq7;
@@ -81,6 +83,7 @@ void setup() {
   Serial.begin(115200);
   oled.begin();
   delay(300);
+  sd.begin();
 
 #if defined(ESP32)
   if (BUZZER_USE_TONE) {
@@ -151,7 +154,6 @@ void loop() {
 
   oled.update(dr.tC, dr.rh, mr.ppm, mr.ratio, mr.ok, mr.calibrated, mr.warmupDone, static_cast<uint8_t>(level));
 
-
   if (now >= nextSendMs) {
     nextSendMs = now + SEND_PERIOD_MS;
 
@@ -173,6 +175,8 @@ void loop() {
     if (!sent) {
       Serial.println("Telemetry send failed/skipped");
     }
+
+    sd.update(now, readings, payload.ts);
 
   }
 
