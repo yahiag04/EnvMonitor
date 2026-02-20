@@ -9,15 +9,11 @@ void Mq7Sensor::begin() {
   calibrated_ = store_.hasValue();
   r0_ = store_.load(MQ7_R0_DEFAULT);
   warmupUntilMs_ = millis() + MQ7_WARMUP_MS;
+  nextSampleAtMs_ = millis();
 
   // ADC: segnali bassi -> 0dB per sensibilità vicino allo zero
   analogReadResolution(12);
   analogSetPinAttenuation(PIN_MQ7_ADC, ADC_0db);
-
-  heater_.begin(PIN_MQ7_HEATER);
-
-  // start cycle
-  switchPhase_(Phase::HEAT_HIGH, millis());
 }
 
 uint16_t Mq7Sensor::readAvgRaw_() const {
@@ -48,24 +44,9 @@ float Mq7Sensor::ratioToPpm_(float ratio) const {
   return CO_A * powf(ratio, CO_B);
 }
 
-void Mq7Sensor::switchPhase_(Phase p, uint32_t nowMs) {
-  phase_ = p;
-  if (phase_ == Phase::HEAT_HIGH) {
-    heater_.setHigh();
-    phaseUntil_ = nowMs + MQ7_HEAT_HIGH_MS;
-  } else {
-    heater_.setLowEquivalent1V4();
-    phaseUntil_ = nowMs + MQ7_HEAT_LOW_MS;
-  }
-}
-
 void Mq7Sensor::update(uint32_t nowMs) {
-  if (nowMs >= phaseUntil_) {
-    switchPhase_(phase_ == Phase::HEAT_HIGH ? Phase::HEAT_LOW : Phase::HEAT_HIGH, nowMs);
-  }
-
-  // Misuriamo SOLO in LOW (come da logica del datasheet)
-  if (phase_ != Phase::HEAT_LOW) return;
+  if (nowMs < nextSampleAtMs_) return;
+  nextSampleAtMs_ = nowMs + MQ7_PERIOD_MS;
 
   uint16_t raw = readAvgRaw_();
   float vNode = rawToVnode_(raw);
@@ -88,8 +69,7 @@ void Mq7Sensor::update(uint32_t nowMs) {
 }
 
 bool Mq7Sensor::calibrateNow(uint8_t samples) {
-  // Calibra R0 usando Rs attuale (devi essere in aria pulita + in fase LOW)
-  if (phase_ != Phase::HEAT_LOW) return false;
+  // Calibra R0 usando Rs attuale (devi essere in aria pulita)
   if (!isWarmupDone(millis())) return false;
   if (samples == 0) return false;
 

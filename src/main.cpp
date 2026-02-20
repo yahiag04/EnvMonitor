@@ -103,9 +103,9 @@ void setup() {
   mq7.begin();
 
   Serial.println("EnvMonitor start");
-  Serial.println("Type 'c' + Enter to calibrate MQ7 R0 (in clean air, during LOW phase).");
+  Serial.println("Type 'c' + Enter to calibrate MQ7 R0 (in clean air, after warm-up).");
   Serial.println("Type 'r' + Enter to reset MQ7 R0 calibration.");
-  Serial.println("Calibration uses 20 LOW samples and requires stable signal (<5% stddev).");
+  Serial.println("Calibration uses 20 samples and requires stable signal (<5% stddev).");
   Serial.println("MQ7 readings are ignored for the first 10 minutes (warm-up).");
 }
 
@@ -121,7 +121,7 @@ void loop() {
     char ch = (char)Serial.read();
     if (ch == 'c') {
       bool ok = mq7.calibrateNow(MQ7_CALIB_SAMPLES);
-      Serial.printf("MQ7 calibrate: %s\n", ok ? "OK" : "FAIL (need LOW phase + warm-up + stable clean air)");
+      Serial.printf("MQ7 calibrate: %s\n", ok ? "OK" : "FAIL (need warm-up + stable clean air)");
     } else if (ch == 'r') {
       mq7.resetCalibration();
       Serial.println("MQ7 calibration reset (R0 fallback restored).");
