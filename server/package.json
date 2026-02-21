@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
-  "scripts": { "start": "node index.js" },
+  "scripts": { "start": "node --env-file=.env index.js" },
   "dependencies": {
     "express": "^4.19.2"
   }

@@ -24,6 +24,8 @@ static AlarmLevel alarmLevel = AlarmLevel::UNKNOWN;
 
 static void setBuzzer(bool on) {
   buzzerOn = on;
+  bool ledOut = ALARM_LED_ACTIVE_HIGH ? on : !on;
+  digitalWrite(PIN_ALARM_LED, ledOut ? HIGH : LOW);
 
 #if defined(ESP32)
   if (BUZZER_USE_TONE) {
@@ -83,7 +85,8 @@ void setup() {
   Serial.begin(115200);
   oled.begin();
   delay(300);
-  sd.begin();
+  bool sdOk = sd.begin();
+  Serial.printf("SD logger: %s\n", sdOk ? "OK" : "FAIL");
 
 #if defined(ESP32)
   if (BUZZER_USE_TONE) {
@@ -95,6 +98,11 @@ void setup() {
 #else
   pinMode(PIN_BUZZER, OUTPUT);
 #endif
+  pinMode(PIN_ALARM_LED, OUTPUT);
+  digitalWrite(PIN_ALARM_LED, ALARM_LED_ACTIVE_HIGH ? LOW : HIGH);
+  setBuzzer(false);
+  setBuzzer(true);
+  delay(500);
   setBuzzer(false);
 
   net::wifiBegin();
@@ -140,6 +148,19 @@ void loop() {
   AlarmLevel level = computeAlarmLevel(mr);
   updateBuzzer(now, level);
 
+  AppReadings readings;
+  readings.tC = dr.tC;
+  readings.rh = dr.rh;
+  readings.dhtOk = dr.ok;
+  readings.mq7Raw = mr.raw;
+  readings.mq7Ratio = mr.ratio;
+  readings.mq7Ppm = mr.ppm;
+  readings.mq7R0 = mr.r0;
+  readings.mq7Ok = mr.ok;
+  readings.mq7Calibrated = mr.calibrated;
+  readings.mq7WarmupDone = mr.warmupDone;
+  readings.mq7Level = static_cast<uint8_t>(level);
+
   if (mr.ok) {
     const char* levelText = (level == AlarmLevel::DANGER) ? "DANGER" :
                             (level == AlarmLevel::WARN) ? "WARN" :
@@ -153,30 +174,16 @@ void loop() {
   }
 
   oled.update(dr.tC, dr.rh, mr.ppm, mr.ratio, mr.ok, mr.calibrated, mr.warmupDone, static_cast<uint8_t>(level));
+  sd.update(now, readings, timeutil::unixTime());
 
   if (now >= nextSendMs) {
     nextSendMs = now + SEND_PERIOD_MS;
-
-    AppReadings readings;
-    readings.tC = dr.tC;
-    readings.rh = dr.rh;
-    readings.dhtOk = dr.ok;
-    readings.mq7Raw = mr.raw;
-    readings.mq7Ratio = mr.ratio;
-    readings.mq7Ppm = mr.ppm;
-    readings.mq7R0 = mr.r0;
-    readings.mq7Ok = mr.ok;
-    readings.mq7Calibrated = mr.calibrated;
-    readings.mq7WarmupDone = mr.warmupDone;
-    readings.mq7Level = static_cast<uint8_t>(level);
 
     net::TelemetryPayload payload{readings, timeutil::unixTime()};
     bool sent = net::postTelemetry(payload);
     if (!sent) {
       Serial.println("Telemetry send failed/skipped");
     }
-
-    sd.update(now, readings, payload.ts);
 
   }
 

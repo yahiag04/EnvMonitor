@@ -18,8 +18,22 @@ void printCsvFloat(File& f, float v, uint8_t decimals) {
 
 bool SdLogger::begin() {
   SPI.begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, PIN_SD_CS);
+  pinMode(PIN_SD_CS, OUTPUT);
+  digitalWrite(PIN_SD_CS, HIGH);
 
+  Serial.printf("SD init pins CS=%d SCK=%d MISO=%d MOSI=%d\n",
+                PIN_SD_CS, PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI);
+
+#if defined(ESP32)
+  // Many cheap SD modules are unstable at default SPI speed with long wires.
+  ready_ = SD.begin(PIN_SD_CS, SPI, 1000000U);
+  if (!ready_) {
+    ready_ = SD.begin(PIN_SD_CS, SPI, 400000U);
+  }
+#else
   ready_ = SD.begin(PIN_SD_CS);
+#endif
+
   if (!ready_) {
     Serial.println("SD init failed");
     return false;
@@ -40,14 +54,19 @@ void SdLogger::update(uint32_t nowMs, const AppReadings& readings, uint32_t unix
   if (nowMs < nextWriteAtMs_) return;
 
   nextWriteAtMs_ = nowMs + SD_PERIOD_MS;
-  (void)appendNow(readings, unixTs);
+  if (!appendNow(readings, unixTs)) {
+    Serial.println("SD append failed");
+  }
 }
 
 bool SdLogger::appendNow(const AppReadings& readings, uint32_t unixTs) {
   if (!ready_) return false;
 
   File f = SD.open(SD_FILE_PATH, FILE_APPEND);
-  if (!f) return false;
+  if (!f) {
+    Serial.println("SD open append failed");
+    return false;
+  }
 
   f.print(unixTs);
   f.print(',');
@@ -83,7 +102,10 @@ bool SdLogger::ensureFileHasHeader_() {
   if (SD.exists(SD_FILE_PATH)) return true;
 
   File f = SD.open(SD_FILE_PATH, FILE_WRITE);
-  if (!f) return false;
+  if (!f) {
+    Serial.println("SD open write failed");
+    return false;
+  }
 
   f.println("ts,millis,tC,rh,dhtOk,mq7Raw,mq7Ratio,mq7Ppm,mq7R0,mq7Ok,mq7Calibrated,mq7WarmupDone,mq7Level");
   f.close();

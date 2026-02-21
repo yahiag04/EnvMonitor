@@ -1,6 +1,6 @@
 # EnvMonitor
 
-ESP32 environmental monitor with DHT11 + MQ-7, real-time telemetry to a Node.js server, OLED output, passive-buzzer alarms, and a modern live web dashboard.
+ESP32 environmental monitor with DHT11 + MQ-7, real-time telemetry to a Node.js server, OLED output, buzzer alarms, and optional local CSV logging on SD card.
 <img width="1454" height="742" alt="Screenshot 2026-02-15 alle 18 42 05" src="https://github.com/user-attachments/assets/3e89a11c-5f93-4212-963e-bebe2429e168" />
 
 ## Features
@@ -8,7 +8,7 @@ ESP32 environmental monitor with DHT11 + MQ-7, real-time telemetry to a Node.js 
 - ESP32 firmware (PlatformIO, Arduino framework)
 - DHT11 temperature/humidity monitoring
 - MQ-7 CO workflow with:
-  - LOW-phase sampling
+  - periodic ADC sampling (`MQ7_PERIOD_MS`)
   - persistent `R0` calibration (`Preferences`)
   - `ratio = Rs/R0` for stable alerting
   - estimated ppm as indicative value
@@ -19,6 +19,7 @@ ESP32 environmental monitor with DHT11 + MQ-7, real-time telemetry to a Node.js 
 - Warm-up protection (first 10 minutes ignored)
 - Passive buzzer alarm patterns (PWM tone)
 - OLED summary screen (T, RH, CO estimate, ratio, state)
+- SD logger (`src/source/sd_logger.*`) with CSV header auto-creation
 - Node.js backend with telemetry history
 - Live dashboard with:
   - current metrics
@@ -35,22 +36,26 @@ ESP32 environmental monitor with DHT11 + MQ-7, real-time telemetry to a Node.js 
 
 ## Hardware
 
-- Board: ESP32 DevKit (AZ-Delivery)
+- Board: ESP32 DevKit
 - Sensors:
   - DHT11
   - MQ-7 (AO read on ADC1)
 - Display: SSD1306 OLED (I2C)
 - Buzzer: passive buzzer
+- Storage (optional): microSD module (SPI)
 
 ### Pin Mapping (current config)
 
 - `DHT11` -> `GPIO4`
 - `MQ-7 AO` -> `GPIO32` (ADC1)
-- `MQ-7 heater control` -> `GPIO25` (reserved for MOSFET-driven heater control)
 - `Buzzer (passive)` -> `GPIO26`
 - `OLED I2C` -> `SDA GPIO21`, `SCL GPIO22`
+- `SD CS` -> `GPIO27`
+- `SD SCK` -> `GPIO18`
+- `SD MISO` -> `GPIO19`
+- `SD MOSI` -> `GPIO23`
 
-> Note: if your MQ-7 module does not expose separate heater control, keep current code as-is and treat ppm as indicative.
+Note: heater/MOSFET control for MQ-7 is not used in the current firmware.
 
 ## Project Structure
 
@@ -68,15 +73,14 @@ EnvMonitor/
 │  ├─ main.cpp
 │  ├─ display/oled_display.cpp
 │  ├─ display/oled_display.h
-│  ├─ drivers/heater_controller.cpp
-│  ├─ drivers/heater_controller.h
 │  ├─ net/telemetry_client.cpp
 │  ├─ net/wifi_manager.cpp
 │  ├─ sensors/dht_sensor.cpp
 │  ├─ sensors/mq7_sensor.cpp
 │  ├─ sensors/mq7_sensor.h
-│  ├─ sensors/mq7_types.cpp
 │  ├─ sensors/mq7_types.h
+│  ├─ source/sd_logger.cpp
+│  ├─ source/sd_logger.h
 │  ├─ storage/r0_store.cpp
 │  ├─ storage/r0_store.h
 │  └─ time/time_sync.cpp
@@ -121,21 +125,24 @@ Main runtime settings are in `include/config.h`:
 - warm-up duration
 - buzzer tone/timing parameters
 - calibration constraints
+- SD pin/path/period settings (`PIN_SD_*`, `SD_FILE_PATH`, `SD_PERIOD_MS`)
 
 ## Calibration Workflow (MQ-7)
 
 1. Power on and wait warm-up (10+ minutes).
-2. Ensure clean air and LOW sampling phase.
+2. Keep the sensor in clean air.
 3. Open serial monitor and press `c`.
 4. Success condition:
-   - 20-sample calibration
-   - relative stddev `< 5%`
+  - 20-sample calibration
+  - relative stddev `< 5%`
 5. To reset calibration, press `r`.
 
 ## Runtime Behavior
 
-- MQ-7 readings are considered valid only after warm-up and valid LOW-phase data.
+- MQ-7 readings are considered valid only after warm-up.
 - Alerts and buzzer are driven by `ratio` (more stable than ppm estimate).
+- Telemetry is sent every `SEND_PERIOD_MS`.
+- SD logging writes CSV rows through `SdLogger`; with current `main.cpp` flow it is triggered at telemetry cadence.
 - Dashboard switches to `Offline` and replaces values with `--` if data is stale (>15s).
 
 ## API Endpoints
@@ -153,5 +160,4 @@ Main runtime settings are in `include/config.h`:
 ## Roadmap
 
 - Better ppm fitting (`A`, `B`) or LUT/interpolation
-- Heater hardware verification with MOSFET and measured LOW equivalent
 - Optional persistence for backend history (DB)

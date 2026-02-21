@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import https from "https";
 
 const app = express();
 app.use(express.json({ limit: "64kb" }));
@@ -15,6 +16,9 @@ app.use(express.static(path.join(__dirname, "public")));
 let latest = null;
 const history = [];
 const MAX_POINTS = 5000;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
+const TELEGRAM_PERIOD_MS = Number(process.env.TELEGRAM_PERIOD_MS || 10 * 60 * 1000);
 
 function toFiniteOrNull(v) {
   if (v === null || v === undefined) return null;
@@ -26,6 +30,82 @@ function pruneHistory() {
   if (history.length > MAX_POINTS) {
     history.splice(0, history.length - MAX_POINTS);
   }
+}
+
+function val(v, suffix = "") {
+  return v === null || v === undefined ? "-" : `${v}${suffix}`;
+}
+
+function sendTelegramMessage(text) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text
+    });
+
+    const req = https.request(
+      {
+        hostname: "api.telegram.org",
+        path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload)
+        }
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve();
+            return;
+          }
+          reject(new Error(`Telegram API ${res.statusCode}: ${body}`));
+        });
+      }
+    );
+
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+function buildTelegramMessage(point) {
+  return [
+    `EnvMonitor (${new Date().toLocaleString("it-IT")})`,
+    `Device: ${point.deviceId}`,
+    `T: ${val(point.t, " C")}`,
+    `RH: ${val(point.rh, " %")}`,
+    `MQ7 ratio: ${val(point.mq7Ratio)}`,
+    `MQ7 ppm: ${val(point.mq7Ppm)}`,
+    `MQ7 level: ${val(point.mq7Level)}`,
+    `Warmup: ${point.mq7WarmupDone ? "Y" : "N"}`,
+    `Calibrated: ${point.mq7Calibrated ? "Y" : "N"}`
+  ].join("\n");
+}
+
+function startTelegramNotifier() {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.log("Telegram disabled: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID");
+    return;
+  }
+
+  console.log(`Telegram notifier enabled (every ${Math.round(TELEGRAM_PERIOD_MS / 1000)}s)`);
+
+  setInterval(async () => {
+    if (!latest) return;
+
+    try {
+      await sendTelegramMessage(buildTelegramMessage(latest));
+      console.log("Telegram notification sent");
+    } catch (err) {
+      console.error(`Telegram send failed: ${err.message}`);
+    }
+  }, TELEGRAM_PERIOD_MS);
 }
 
 app.post("/api/v1/telemetry", (req, res) => {
@@ -69,4 +149,5 @@ app.get("/api/v1/history", (req, res) => {
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Listening on http://0.0.0.0:${PORT}`);
+  startTelegramNotifier();
 });
